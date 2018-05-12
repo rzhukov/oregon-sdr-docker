@@ -1,4 +1,4 @@
-FROM 3.6-alpine3.7
+FROM arm32v7/python:3.6-slim
 
 MAINTAINER Roman Zhukov
 
@@ -13,7 +13,8 @@ ENV MQTT_TOPIC_PREFIX="rtl_433"
 #
 # First install software packages needed to compile rtl_433 and to publish MQTT events
 #
-RUN apk add --no-cache --virtual build-deps alpine-sdk cmake git libusb-dev && \
+RUN apt-get update && \
+    apt-get install -y git libtool libusb-1.0.0-dev librtlsdr-dev rtl-sdr cmake automake && \
     mkdir /tmp/src && \
     cd /tmp/src && \
     git clone git://git.osmocom.org/rtl-sdr.git && \
@@ -31,10 +32,10 @@ RUN apk add --no-cache --virtual build-deps alpine-sdk cmake git libusb-dev && \
     cmake ../ && \
     make && \
     make install && \
-    apk del build-deps && \
     rm -r /tmp/src && \
-    apk add --no-cache libusb mosquitto-clients
+    apt-get install -y mosquitto-clients
 
+COPY requirements.txt .
 RUN pip install -r requirements.txt
 
 COPY run.py .

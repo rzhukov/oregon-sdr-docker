@@ -1,17 +1,24 @@
 import json
 import logging
+import sys
 import os
 import subprocess
-from json import JSONDecodeError
 from queue import Queue, Empty
 from threading import Thread
 
 import paho.mqtt.client as mqtt
 
+
+class MqttMessage:
+    def __init__(self, topic, data):
+        self.data = data
+        self.topic = topic
+
+
 RTL_COMMAND = ['rtl_433', '-q', '-f', '433920000', '-F', 'json', '-R', '12']
 MQTT_TOPIC_PREFIX = os.environ['MQTT_TOPIC_PREFIX']
 MQTT_HOST = os.environ['MQTT_HOST']
-MQTT_PORT = os.environ['MQTT_PORT']
+MQTT_PORT = int(os.environ['MQTT_PORT'])
 MQTT_LOGIN = os.environ['MQTT_LOGIN']
 MQTT_PASS = os.environ['MQTT_PASS']
 
@@ -26,7 +33,7 @@ def on_publish(client, userdata, mid):
     logging.info("mid: " + str(mid))
 
 
-logging.basicConfig(filename=__file__.replace(".py", '.log'), level=logging.INFO)
+logging.basicConfig(stream=sys.stdout, level=logging.DEBUG)
 logging.info("start")
 
 mqttc = mqtt.Client("rtl_433")
@@ -38,6 +45,7 @@ logging.info("main loop")
 
 def enqueue_output(src, out, queue):
     for line in iter(out.readline, b''):
+        print("Received: {}".format(line))
         queue.put((src, line))
     out.close()
 
@@ -48,6 +56,7 @@ def process_data(payload):
         if 'channel' in payload:
             device_id = "{}{}".format(device_id, payload['channel'])
         if device_id in SENSOR_IDS:
+            print("{}: {}".format(device_id, payload))
             return MqttMessage(device_id, payload)
         else:
             return None
@@ -81,21 +90,17 @@ def start():
             pulse -= 1
             try:
                 payload = json.loads(line.decode("utf-8"))
-                logging.debug(payload)
+                print (payload)
 
                 mqtt_message = process_data(payload)
                 if mqtt_message != None:
                     publish_mqtt_message(mqtt_message)
-            except JSONDecodeError:
-                logging.debug(line)
+                else:
+                    logging.debug("mqtt_message is None")
+            except json.JSONDecodeError:
+                logging.error(line)
 
 
 if __name__ == '__main__':
     print("INFO: Starting command: {}".format(RTL_COMMAND))
     start()
-
-
-class MqttMessage:
-    def __init__(self, topic, data):
-        self.data = data
-        self.topic = topic
